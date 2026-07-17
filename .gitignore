@@ -1,0 +1,15 @@
+# data is reproducible via scripts/build_corpus.py (and is legally committable --
+# statutes are non-copyrightable + MIT dataset; excluded by project decision)
+data/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+.DS_Store
+*.sqlite
