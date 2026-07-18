@@ -48,7 +48,7 @@ def _extract_json(text: str) -> Any:
     m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
         raise ActionError(f"no JSON found in policy output: {text[:200]!r}")
-    return json.loads(m.group(1))
+    return json.loads(m.group(0))
 
 
 def parse_action(text: str) -> dict[str, Any]:

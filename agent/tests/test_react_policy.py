@@ -147,3 +147,10 @@ def test_retry_feeds_error_back_to_model():
     assert update["final"] == "고침"
     # 두 번째 호출의 user 프롬프트에 이전 오류가 피드백돼야 모델이 교정 가능
     assert "invalid" in llm.calls[1][1] and "tool" in llm.calls[1][1]
+
+
+def test_parse_action_json_embedded_in_prose():
+    # thinking 모델이 JSON 앞뒤로 텍스트를 붙여도 추출된다 — 캡처 그룹 없는 정규식에
+    # group(1)을 호출해 IndexError가 나던 회귀 (ablation 라이브에서 실측)
+    a = policy.parse_action('생각: 검색하자.\n{"action": "tool", "tool": "s", "args": {}}\n끝.')
+    assert a["action"] == "tool" and a["tool"] == "s"
