@@ -10,6 +10,28 @@
 > 전문 에스컬레이션 / 관측 재설계(상위 2건 600자) / Phase 8 UI.
 > 평가 자산: answer_types.parquet(확답 188/조건부 494/판단불가 19),
 > primary_labels.parquet(LLM 핵심조문), qrels_realistic.parquet(일상어 120).
+>
+> **다음 배치 (우선순위 확정, 2026-07-19 유저 합의):**
+> 1. **doc2query 역질문 증강** — 인덱싱 시 9B가 조문당 예상 질문 2~3개 생성해
+>    임베딩 텍스트에 부착 (남은 최대 실패 = 추론형 어휘 갭 정조준. 예: "KCs
+>    표시된 제품만 사용 가능?"↔제87조 "제조·수입·양도 금지". 1,787×1호출 오프라인,
+>    새 컬렉션으로 A/B).
+> 2. **동시 인용(co-citation) 그래프** — 질의회시 추가 수집(수천 건 풀) →
+>    citations.py 재사용 → "함께 인용되는 조문 쌍" 엣지로 교차 법령 연결 보강.
+>    ⚠ **평가셋 701건은 마이닝에서 제외** (누수 방지 필수).
+> 3. 조건부 세트 판정 라운드 (τ필터 → 압축 뷰 1호출로 커버리지·재계획 → 플래그
+>    청크만 전문 정독 — 상시 8병렬 아님, 비용 사다리 설계 합의됨)
+> 4. 리랭커/임베더 체급 실험 (R@3↔R@8 갭 9.6pp = 리랭커 변별력; qrels 701이
+>    리랭커 파인튜닝 데이터로 재사용 가능)
+> 5. 관측 재설계 (상위 2건 본문 600자 + 엣지 필드 — 위임 가시율 10%→73%+보험)
+> 6. Phase 8 Gradio UI (스텝 스트리밍 + HITL 신청 데모) + 스코프 라우팅 기능화
+>    (answer_type 분류를 파이프라인 앞단 게이트로)
+>
+> **세션 시작 절차**: ① `bash scripts/serve.sh start` (Qdrant+임베더+리랭커+9B —
+> EMBED_GPU=1 모드였음, .env EMBEDDER_URL=:8001) ② `pytest` 187개 green 확인
+> ③ 재현 커맨드: `PYTHONPATH=. python scripts/run_ablations.py retrieval --arms
+> struct+ce --collection statutes_kiwi --sparse kiwi --outdir data/eval/ablation_kiwi`.
+> 평가 스코어는 data/eval/ablation*/. 이 문서 §결정 로그 먼저 읽을 것.
 > 레포 공개됨(github.com/Taeksu-Kim/agentic_rag). 결과 = `docs/ablation_results.md`
 > (v1 매트릭스 + v3 타깃 재측정), 실패 추적 = `docs/postmortem.md` (유저 지시로
 > 추가된 컨셉 — 프론티어 모델 페어코딩의 실패 기록).
