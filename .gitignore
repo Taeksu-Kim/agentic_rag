@@ -13,3 +13,5 @@ venv/
 .env
 .DS_Store
 *.sqlite
+snapshots/
+.qdrant-initialized
