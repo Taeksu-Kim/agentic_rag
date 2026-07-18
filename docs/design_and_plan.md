@@ -1,13 +1,25 @@
 # Retriever Agent — 설계 & 작업 계획
 
 > 이 문서는 세션이 바뀌어도 작업을 이어갈 수 있도록 **모든 결정과 문맥**을 담는다.
-> 작성: 2026-07-17 (갱신 07-18). 상태: **Phase 0~4, 6 완료 — ablation 매트릭스 확보.**
-> 결과+해석 = `docs/ablation_results.md` (핵심: 0.6B CE 리랭커가 스위트스팟 MRR 0.584
-> @0.16s; 리랭크 없인 dense>hybrid(한국어 BM25 약함); react 에이전트는 이 평가셋에서
-> 1-shot+CE에 열세 — 필터 오용 + 질의회시가 이미 법률용어라 리라이팅 이득 없음;
-> 청킹 불필요 데이터로 재확인 — miss는 짧은 조문에 몰림).
-> 다음 = **Phase 7 (README/공개)** → 8(Gradio UI+HITL 신청 데모). 후속 아이디어:
-> 일상어 변형 평가셋(에이전트 리라이팅 이득 측정), react 필터 오용 가드.
+> 작성: 2026-07-17 (갱신 07-19). 상태: **Phase 0~4, 6, 7 + 레버 3종(union/struct/
+> kiwi) 실장 완료.** 최종 사다리(격식 701 R@8, kiwi 컬렉션 statutes_kiwi):
+> sparse 0.507 / hybrid 0.570 / hybrid+ce 0.616(LLM 0회) / **struct+ce 0.640**.
+> 제품 스코프(확답형 188, LLM 재라벨 핵심조문): **R@8 0.782, any-hit 0.862**.
+> 에이전트는 시딩으로 1-shot 동률. 남은 진성 실패 ~14-22% = 어휘 갭(임베더 체급)
+> + 교차 인용. 다음 배치: 임베더 업그레이드 실험 / τ 필터 → 조건부 세트 판정 →
+> 전문 에스컬레이션 / 관측 재설계(상위 2건 600자) / Phase 8 UI.
+> 평가 자산: answer_types.parquet(확답 188/조건부 494/판단불가 19),
+> primary_labels.parquet(LLM 핵심조문), qrels_realistic.parquet(일상어 120).
+> 레포 공개됨(github.com/Taeksu-Kim/agentic_rag). 결과 = `docs/ablation_results.md`
+> (v1 매트릭스 + v3 타깃 재측정), 실패 추적 = `docs/postmortem.md` (유저 지시로
+> 추가된 컨셉 — 프론티어 모델 페어코딩의 실패 기록).
+> 핵심 결론: ① 0.6B CE 리랭커 = 스위트스팟 (formal +11pp MRR, 일상어 갭도 흡수
+> −1.4pp) ② react는 수정(필터 목록·정규화·0건 폴백, evidence=LLM픽5+세션 채움,
+> 프레임워크 group(1) 버그픽스) 후에도 1-shot+CE 미역전 — 일상어 평가셋
+> (qrels_realistic.parquet, 120)에서도 기각. 에이전트 가치 = 해석가능성/멀티소스.
+> ③ 남은 개선 카드: 원 질문 그대로 검색 1회 상시 포함(미측정).
+> 다음 = **Phase 8 (Gradio UI + HITL 신청 데모)**. basic_agent 업스트림 완료 여부는
+> 커밋 로그 확인 (group(0) 픽스 + 회귀 테스트 2개).
 >
 > Phase 6 구현 내역 (2026-07-18, 156 tests green):
 > - `evaluation/metrics.py` (recall@k, MRR) + `evaluation/runner.py`
