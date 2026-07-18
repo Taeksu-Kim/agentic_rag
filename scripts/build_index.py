@@ -28,6 +28,8 @@ CORPUS = os.path.join(ROOT, "data", "corpus", "labor_statutes.parquet")
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--collection", default="statutes")
+    ap.add_argument("--sparse", choices=["fastembed", "kiwi"], default="fastembed",
+                    help="kiwi = 형태소 BM25 (통계를 data/corpus/kiwi_bm25_stats.json에 저장)")
     args = ap.parse_args()
 
     df = pd.read_parquet(CORPUS)
@@ -37,7 +39,12 @@ def main() -> None:
 
     t0 = time.time()
     dense = VLLMDenseEmbedder()
-    sparse = BM25SparseEmbedder()
+    if args.sparse == "kiwi":
+        from retriever.kiwi_bm25 import KiwiBM25SparseEmbedder
+        sparse = KiwiBM25SparseEmbedder().fit(texts)
+        sparse.save(os.path.join(ROOT, "data", "corpus", "kiwi_bm25_stats.json"))
+    else:
+        sparse = BM25SparseEmbedder()
     dvs = dense.encode(texts)
     print(f"dense encoded in {time.time()-t0:.1f}s")
     svs = sparse.encode(texts)

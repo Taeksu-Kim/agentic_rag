@@ -111,6 +111,29 @@ def test_single_vector_mode_honours_filter(indexed):
     assert hits and all(h.payload["law_name"] == "근로기준법 시행령" for h in hits)
 
 
+def test_union_merges_pools_and_reranks(indexed):
+    from retriever.search import search_statutes_union
+    client, dense, sparse = indexed
+    q1, q2 = build_embedding_text(CLAUSES[0]), build_embedding_text(CLAUSES[2])
+    hits = search_statutes_union(
+        client, "statutes",
+        queries=[(dense.encode([q1])[0], sparse.encode_query([q1])[0]),
+                 (dense.encode([q2])[0], sparse.encode_query([q2])[0])],
+        rerank_query="주휴일 개근", reranker=FakeReranker(),
+        k=8, prefetch_limit=1,  # 쿼리당 풀 1개 -> 합집합이 두 쿼리 결과를 다 담아야 함
+    )
+    cids = [h.payload["cid"] for h in hits]
+    assert set(cids) == {"근로기준법|60", "근로기준법 시행령|30"}
+    assert cids[0] == "근로기준법 시행령|30"  # rerank_query('주휴일') 기준 재정렬
+
+
+def test_union_empty_queries_returns_empty(indexed):
+    from retriever.search import search_statutes_union
+    client, *_ = indexed
+    assert search_statutes_union(client, "statutes", queries=[],
+                                 rerank_query="q", reranker=FakeReranker()) == []
+
+
 def test_rerank_requires_query_text(indexed):
     client, dense, sparse = indexed
     with pytest.raises(ValueError):

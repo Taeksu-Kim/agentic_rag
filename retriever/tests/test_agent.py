@@ -38,7 +38,7 @@ async def test_agent_searches_then_finishes_with_resolved_evidence():
          "result": {"cids": ["근로기준법|60", "환각된법|99"]}},
     )
     graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
-    out = await run_statute_agent(graph, search_tool, "육아휴직 연차 발생?")
+    out = await run_statute_agent(graph, search_tool, "육아휴직 연차 발생?", seed_raw_search=False)
 
     assert "출근" in out["answer"]
     assert [e["cid"] for e in out["evidence"]] == ["근로기준법|60"]  # 환각 cid 제거
@@ -54,15 +54,56 @@ async def test_agent_without_cids_falls_back_to_top_session():
         {"action": "finish", "final": "답"},  # result 없음
     )
     graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
-    out = await run_statute_agent(graph, search_tool, "질문")
+    out = await run_statute_agent(graph, search_tool, "질문", seed_raw_search=False)
     assert out["evidence"] and out["evidence"][0]["cid"].startswith("남녀고용평등")
+
+
+async def test_seed_raw_search_guarantees_evidence_floor():
+    # LLM이 검색 한 번 없이 finish해도(최악의 루프) 원 질문 시딩이 근거를 보장
+    client, dense, sparse = _index()
+    llm = FakeLLM.json({"action": "finish", "final": "답", "result": None})
+    graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
+    out = await run_statute_agent(graph, search_tool, build_embedding_text(CLAUSES[0]))
+    assert out["evidence"]  # 시딩된 세션에서 채워짐
+    assert out["steps"] == []  # 시딩은 LLM 관측(scratchpad)에 안 들어감
+
+
+async def test_evidence_fills_from_session_beyond_llm_picks():
+    # LLM이 한 조문만 골라도(큐레이션 실패) 세션 고점수 조문이 max_evidence까지 채워진다
+    client, dense, sparse = _index()
+    llm = FakeLLM.json(
+        {"action": "tool", "tool": "statute_search",
+         "args": {"query": build_embedding_text(CLAUSES[0]), "k": 2}},  # 세션에 2건
+        {"action": "finish", "final": "답",
+         "result": {"cids": ["남녀고용평등과 일ㆍ가정 양립 지원에 관한 법률|19"]}},
+    )
+    graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
+    out = await run_statute_agent(graph, search_tool, "질문", seed_raw_search=False)
+    cids = [e["cid"] for e in out["evidence"]]
+    assert cids[0] == "남녀고용평등과 일ㆍ가정 양립 지원에 관한 법률|19"  # LLM 선택 우선
+    assert "근로기준법|60" in cids                                        # 세션 채움
+
+
+async def test_llm_picks_capped():
+    client, dense, sparse = _index()
+    llm = FakeLLM.json(
+        {"action": "tool", "tool": "statute_search",
+         "args": {"query": build_embedding_text(CLAUSES[0]), "k": 2}},
+        {"action": "finish", "final": "답",
+         "result": {"cids": ["근로기준법|60", "남녀고용평등과 일ㆍ가정 양립 지원에 관한 법률|19"]}},
+    )
+    graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
+    out = await run_statute_agent(graph, search_tool, "질문", max_llm_picks=1, max_evidence=2, seed_raw_search=False)
+    cids = [e["cid"] for e in out["evidence"]]
+    assert cids[0] == "근로기준법|60"   # 캡 이후는 LLM 선택이 아니라 세션 점수순
+    assert len(cids) == 2
 
 
 async def test_system_prompt_carries_rewriting_guidance():
     client, dense, sparse = _index()
     llm = FakeLLM.json({"action": "finish", "final": "x"})
     graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
-    await run_statute_agent(graph, search_tool, "질문")
+    await run_statute_agent(graph, search_tool, "질문", seed_raw_search=False)
     assert "법률 용어" in llm.calls[0][0]  # 리라이팅 지침이 system에 포함
 
 
@@ -75,8 +116,8 @@ async def test_session_reset_between_runs():
         {"action": "finish", "final": "b"},  # 2번째 run: 검색 안 함 -> evidence 없어야
     )
     graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
-    out1 = await run_statute_agent(graph, search_tool, "q1")
-    out2 = await run_statute_agent(graph, search_tool, "q2")
+    out1 = await run_statute_agent(graph, search_tool, "q1", seed_raw_search=False)
+    out2 = await run_statute_agent(graph, search_tool, "q2", seed_raw_search=False)
     assert out1["evidence"] and out2["evidence"] == []  # 이전 세션이 새 run에 새면 안 됨
 
 
@@ -90,7 +131,7 @@ async def test_answer_synthesized_from_evidence_when_final_empty():
     )
     synth = FakeLLM(["육아휴직 기간은 출근으로 간주되어 연차가 발생합니다."])
     graph, search_tool = build_statute_agent(llm=llm, client=client, dense=dense, sparse=sparse)
-    out = await run_statute_agent(graph, search_tool, "육아휴직 연차?", synth_llm=synth)
+    out = await run_statute_agent(graph, search_tool, "육아휴직 연차?", synth_llm=synth, seed_raw_search=False)
 
     assert "연차가 발생" in out["answer"]          # 합성 답변
     assert "근로기준법" in synth.calls[0][1]        # 조문 전문이 합성 프롬프트에 포함

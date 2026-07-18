@@ -60,6 +60,52 @@ def test_top_session_fallback_and_reset(tool):
     assert tool.top_session(k=5) == [] and tool.resolve(["근로기준법|60"]) == []
 
 
+def test_filter_zero_hits_retries_without_filter(tool):
+    out = tool.run(query="육아휴직 허용", law_names=["존재하지 않는 법"])
+    assert "note" in out[0] and "필터" in out[0]["note"]   # LLM에게 필터 실패 고지
+    results = [o for o in out if "cid" in o]
+    assert results                                          # 필터 해제 결과는 돌려준다
+    assert tool.top_session(k=1)                            # 세션에도 누적
+
+
+def test_valid_filter_not_dropped(tool):
+    out = tool.run(query="휴가", law_names=["근로기준법"])
+    assert all("note" not in o for o in out)
+    assert all(o["cid"].startswith("근로기준법") for o in out)
+
+
+LAWS = ["근로기준법", "남녀고용평등과 일ㆍ가정 양립 지원에 관한 법률"]
+
+
+@pytest.fixture()
+def tool_with_laws(tool):
+    tool._valid_laws = LAWS
+    tool._law_norm = {n.replace(" ", ""): n for n in LAWS}
+    return tool
+
+
+def test_valid_laws_listed_in_description():
+    t = StatuteSearchTool(client=QdrantClient(":memory:"), collection="s",
+                          dense=FakeDenseEmbedder(dim=8), sparse=FakeSparseEmbedder(),
+                          valid_laws=LAWS)
+    assert all(l in t.description for l in LAWS)
+    assert "여러 법령을 한 번에" in t.description
+
+
+def test_law_name_space_variants_normalized(tool_with_laws):
+    # "남녀고용평등과일ㆍ가정양립..." (공백 누락)도 정확 표기로 교정되어 필터 적중
+    out = tool_with_laws.run(query="육아휴직",
+                             law_names=["남녀고용평등과일ㆍ가정양립지원에관한법률"])
+    hits = [o for o in out if "cid" in o]
+    assert hits and all(o["cid"].startswith("남녀고용평등") for o in hits)
+    assert all("note" not in o for o in out)  # 폴백이 아니라 정규화로 해결
+
+
+def test_k_clamped(tool):
+    out = tool.run(query="휴가", k=999)  # 상한 초과 요청도 에러 없이 동작
+    assert len([o for o in out if "cid" in o]) <= 10
+
+
 def test_web_search_normalizes_backend_results():
     backend = FakeSearchBackend(results=[{"title": "연차휴가 안내", "url": "http://x", "snippet": "설명"}])
     tool = WebSearchTool(backend=backend)

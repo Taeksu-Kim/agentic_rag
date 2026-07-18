@@ -27,8 +27,10 @@ async def amain() -> None:
     ap.add_argument("--trace", action="store_true", help="스텝 트레이스 출력")
     args = ap.parse_args()
 
-    llm = OpenAICompatLLM(base_url=config.LLM_URL, model=config.LLM_MODEL,
+    llm = OpenAICompatLLM(base_url=config.LLM_URL, model=config.LLM_MODEL, timeout=300.0,
                           sampling={"temperature": 0.2, "frequency_penalty": 0.5, "max_tokens": 2048})
+    import pandas as pd
+    laws = sorted(pd.read_parquet("data/corpus/labor_statutes.parquet").law_name.unique())
     graph, search_tool = build_statute_agent(
         llm=llm,
         client=QdrantClient(url=config.QDRANT_URL),
@@ -36,6 +38,7 @@ async def amain() -> None:
         sparse=BM25SparseEmbedder(),
         reranker=None if args.no_rerank else VLLMReranker(),
         max_steps=args.max_steps,
+        valid_laws=laws,
     )
     out = await run_statute_agent(graph, search_tool, args.question, synth_llm=llm)
 

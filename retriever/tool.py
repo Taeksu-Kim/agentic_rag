@@ -20,6 +20,7 @@ from retriever.reranker import Reranker
 from retriever.search import build_filter, search_statutes
 
 SNIPPET_LEN = 160
+MAX_K = 10
 
 
 class StatuteSearchTool(BaseTool):
@@ -41,7 +42,8 @@ class StatuteSearchTool(BaseTool):
     def __init__(self, *, client: QdrantClient, collection: str,
                  dense: DenseEmbedder, sparse: SparseEmbedder,
                  reranker: Optional[Reranker] = None,
-                 default_k: int = 8, prefetch_limit: int = 30) -> None:
+                 default_k: int = 8, prefetch_limit: int = 30,
+                 valid_laws: Optional[Sequence[str]] = None) -> None:
         self._client = client
         self._collection = collection
         self._dense = dense
@@ -50,18 +52,50 @@ class StatuteSearchTool(BaseTool):
         self._default_k = default_k
         self._prefetch_limit = prefetch_limit
         self.session: dict[str, dict[str, Any]] = {}  # cid -> full record (best score)
+        # 법령명은 닫힌 소규모 집합(노동 8종 x 법/령/규칙 = 24) — 목록을 LLM에게
+        # 보여주면 필터 오타가 사라지고 오특정도 3% 수준으로 떨어진다 (핀포인트 실측:
+        # 목록 제공 시 유효 표기 29/30, R@8 +6.3pp). 공백 제거 매칭으로 잔여 오타 흡수.
+        self._valid_laws = list(valid_laws) if valid_laws else None
+        self._law_norm = ({n.replace(" ", ""): n for n in self._valid_laws}
+                          if self._valid_laws else {})
+        if self._valid_laws:
+            self.description = (
+                "노동법 조문(법률/시행령/시행규칙)을 검색한다. query는 조문이 쓸 법한 "
+                "법률 용어로 쓸 것. law_names로 법령을 좁힐 수 있고 **여러 법령을 한 번에** "
+                "넣어도 된다(예: 법과 그 시행령). 유효한 법령명(이 표기 그대로만): "
+                + ", ".join(self._valid_laws)
+            )
+
+    def _normalize_laws(self, law_names: Optional[Sequence[str]]) -> Optional[list[str]]:
+        """공백 변형("산업안전보건법시행령")을 정확 표기로 교정. 미지의 이름은 유지
+        (-> 0건 -> 필터 해제 폴백이 흡수)."""
+        if not law_names:
+            return None
+        return [self._law_norm.get(str(n).replace(" ", ""), str(n)) for n in law_names]
 
     def run(self, query: str, k: int | None = None,
             law_names: Optional[Sequence[str]] = None) -> list[dict[str, Any]]:
-        hits = search_statutes(
-            self._client, self._collection,
-            dense_vec=self._dense.encode([query])[0],
-            sparse_vec=self._sparse.encode_query([query])[0],
-            k=k or self._default_k, prefetch_limit=self._prefetch_limit,
-            flt=build_filter(law_names=law_names),
-            reranker=self._reranker, query_text=query if self._reranker else None,
-        )
-        out = []
+        k = min(k or self._default_k, MAX_K)  # LLM이 k를 크게 불러도 상한
+        law_names = self._normalize_laws(law_names)
+
+        def _search(names):
+            return search_statutes(
+                self._client, self._collection,
+                dense_vec=self._dense.encode([query])[0],
+                sparse_vec=self._sparse.encode_query([query])[0],
+                k=k, prefetch_limit=self._prefetch_limit,
+                flt=build_filter(law_names=names),
+                reranker=self._reranker, query_text=query if self._reranker else None,
+            )
+
+        hits = _search(law_names)
+        filter_dropped = False
+        if not hits and law_names:
+            # LLM이 존재하지 않는 법령명 표기로 필터를 걸면 0건이 된다 (ablation 실측:
+            # max_steps=2에서 빈손 17%의 주범). 코드가 필터를 해제하고 재검색해 준다.
+            hits = _search(None)
+            filter_dropped = True
+        out: list[dict[str, Any]] = []
         for h in hits:
             p = h.payload
             rec = {"cid": p["cid"], "law_name": p["law_name"], "law_type": p["law_type"],
@@ -77,6 +111,10 @@ class StatuteSearchTool(BaseTool):
                 "snippet": body[:SNIPPET_LEN],
                 "score": round(float(h.score), 4),
             })
+        if filter_dropped:
+            out.insert(0, {"note": (
+                f"law_names={list(law_names)} 필터와 일치하는 조문이 0건이라 필터를 "
+                "해제하고 재검색했다. 필터 값은 검색 결과의 law_name 표기 그대로만 유효하다.")})
         return out
 
     # -- evidence resolution (agent wrapper uses these; not exposed to the LLM) --

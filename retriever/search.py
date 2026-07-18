@@ -79,3 +79,40 @@ def search_statutes(
     for h, s in zip(hits, scores):
         h.score = float(s)
     return sorted(hits, key=lambda h: h.score, reverse=True)[:k]
+
+
+def search_statutes_union(
+    client: QdrantClient,
+    collection: str,
+    *,
+    queries: Sequence[tuple[Sequence[float], models.SparseVector]],
+    rerank_query: str,
+    reranker: Reranker,
+    k: int = 8,
+    prefetch_limit: int = 30,
+    flt: Optional[models.Filter] = None,
+) -> list[models.ScoredPoint]:
+    """합집합 멀티쿼리: 쿼리별 1단계 풀을 합치고(중복 제거) 원 질문으로 리랭크.
+
+    실측 근거(일상어 101쿼리): 원문 단독 R@8 0.543 / 리라이팅 **대체** 0.520 /
+    **합집합 0.567** — 리라이팅은 대체가 아니라 풀 확장으로 써야 값을 한다.
+    합집합 병합의 점수 기준이 리랭커라서 reranker가 필수다.
+    """
+    seen: set = set()
+    cands: list[models.ScoredPoint] = []
+    for dense_vec, sparse_vec in queries:
+        hits = search_statutes(
+            client, collection, dense_vec=dense_vec, sparse_vec=sparse_vec,
+            k=prefetch_limit, prefetch_limit=prefetch_limit, flt=flt,
+        )
+        for h in hits:
+            cid = h.payload.get("cid")
+            if cid not in seen:
+                seen.add(cid)
+                cands.append(h)
+    if not cands:
+        return []
+    scores = reranker.rerank(rerank_query, [h.payload.get("text", "") for h in cands])
+    for h, s in zip(cands, scores):
+        h.score = float(s)
+    return sorted(cands, key=lambda h: h.score, reverse=True)[:k]

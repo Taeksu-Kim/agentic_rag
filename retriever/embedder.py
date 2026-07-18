@@ -68,17 +68,22 @@ class VLLMDenseEmbedder:
     """Dense embeddings from the vLLM embedding server (OpenAI-compatible)."""
 
     def __init__(self, base_url: str | None = None, model: str | None = None,
-                 dim: int = 1024, timeout: float = 120.0, batch: int = 64) -> None:
+                 dim: int = 1024, timeout: float = 120.0, batch: int = 64,
+                 max_chars: int = 3500) -> None:
         self.base_url = (base_url or config.EMBEDDER_URL).rstrip("/")
         self.model = model or config.EMBEDDER_MODEL
         self.dim = dim
         self.timeout = timeout
         self.batch = batch
+        # 서빙 max-model-len(4096토큰) 초과 시 400. 서버측 truncate_prompt_tokens는
+        # pooling 엔드포인트에서 무한 대기(/score와 동일 실패 모드, 실측) —
+        # 클라이언트 절단만 신뢰한다. 3,500자 초과 조문은 코퍼스에 극소수.
+        self.max_chars = max_chars
 
     def encode(self, texts: Sequence[str]) -> list[list[float]]:
         import requests  # lazy
 
-        texts = list(texts)
+        texts = [t[:self.max_chars] for t in texts]
         out: list[list[float]] = []
         for i in range(0, len(texts), self.batch):
             r = requests.post(f"{self.base_url}/embeddings",
