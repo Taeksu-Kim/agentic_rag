@@ -60,6 +60,10 @@ Qdrant 벡터DB에 dense(`Qwen3-Embedding-0.6B`) + kiwi 형태소 BM25를 RRF로
 
 실행: `PYTHONPATH=. python ui/app.py` (백엔드 `serve.sh` 가동 후). 고화질 영상: [`docs/media/demo.mp4`](docs/media/demo.mp4). 재현 캡처: `scripts/capture_demo.py`.
 
+https://github.com/user-attachments/assets/19a2e501-e048-4040-8571-11518b433436
+
+
+
 ## 핵심 결과 (ablation)
 
 전 조합을 고용노동부 질의회시 기반 **701쿼리 qrels**(조문 단위 정답)로 평가. 전체 표와 해석은 [`docs/ablation_results.md`](docs/ablation_results.md).
