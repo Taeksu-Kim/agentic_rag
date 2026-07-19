@@ -4,7 +4,9 @@
 
 사내 HR 컴플라이언스 봇(한국 노동법) 시나리오지만 코드는 코퍼스 무관 — 데이터를 갈아끼우면 그대로 동작한다. 로컬 GPU 1장(RTX 4090)에서 임베더·리랭커·9B LLM 3모델을 동시 서빙.
 
-![데모](docs/media/demo.gif)
+<video src="https://github.com/Taeksu-Kim/agentic_rag/raw/main/docs/media/demo.mp4" controls muted width="100%"></video>
+
+_실시간 데모 (로컬 4090 1장에서 9B 에이전트가 실제로 도는 속도). 영상이 안 보이면 → [demo.mp4](docs/media/demo.mp4) · [demo.gif](docs/media/demo.gif)_
 
 ## 갖춘 것
 
@@ -96,16 +98,21 @@ R@8 0.782, 실질 라벨 any-hit@8 0.862**. miss 정독으로 "검색 실패"와
 
 ```mermaid
 flowchart TD
-    Q[질문] --> P["reason (Qwen3.5-9B)\n리라이팅 · 디컴포지션 · 충분성 판정"]
-    P -->|act| S[statute_search]
-    P -->|act| W["web_search (ddgs)"]
+    Q[질문] --> P["reason 루프 (Qwen3.5-9B)\n쟁점 분해 · 법률용어 리라이팅 · 도구 선택"]
+
+    P -->|정보 질의| S[statute_search]
     S --> P
-    W --> P
-    P -->|finish: cid 선택| R["resolve() — 코드가 전문 해소\n(환각 구조적 차단)"]
-    R --> A[답변 합성 + 근거 조문]
+    P -->|입력 필요| H["ask_human → 입력 폼 (HITL)"]
+    H -.->|폼 제출| P
+    P -->|처리| C[calculate_annual_leave]
+    C --> P
+    P -->|신청| G{{"submit_leave_request\n승인 게이트 requires_approval (HITL)"}}
+    G -.->|승인| P
+
+    P -->|finish| A["답변 — cid resolve()로 조문 전문 인용(환각 차단)\n/ 처리 결과(계산·접수번호)"]
 
     subgraph statute_search 내부 2단계
-        S1["하이브리드 top-30\ndense(Qwen3-Emb 0.6B) + BM25 → RRF"] --> S2["크로스인코더 top-8\nQwen3-Reranker-0.6B"]
+        S1["하이브리드 top-30\ndense(Qwen3-Emb 0.6B) + kiwi BM25 → RRF"] --> S2["크로스인코더 top-8\nQwen3-Reranker-0.6B"]
     end
     S -.-> S1
 ```
@@ -172,17 +179,4 @@ data/         # gitignored — 위 스크립트로 재현
 
 **테스트 209개, 전부 fake 기반** (네트워크·실서버·실모델 없이 `pytest` 한 방) — 임베더/리랭커/LLM/웹은 Protocol 뒤에 두고 fake로 갈아끼운다.
 
-## 한계 · 정직한 네거티브
-
-*(향후 개선 로드맵은 위 [현업 수준으로 더 나아가려면](#현업-수준으로-더-나아가려면) 참조.)*
-
-- **에이전트 반복 검색은 1-shot을 못 넘었다** (2회 검증): 원 질문 그대로의 검색을 항상 1회 포함하는 시딩(`seed_raw_search`)으로 격차 절반은 회복했지만 역전은 없음 — 에이전트 가치는 검색 품질이 아니라 해석가능성·멀티소스.
-- **퓨샷 리라이터는 무효과로 기각**: 리라이터를 질적으로 개선해도 검색 지표 불변 — CE 리랭커가 어휘 갭을 이미 흡수해 리라이팅에 남은 헤드룸이 없음을 재확인 ([`docs/ablation_results.md`](docs/ablation_results.md) §퓨샷 리라이터).
-- qrels가 회답 인용 조문 전부를 정답으로 치는 보수적 채점 (멀티라벨 완전회수는 1-shot도 21%).
-
-## 개발 회고
-
-프론티어 모델(Claude)과 페어코딩하고 런타임에 9B 에이전트를 쓰면서 생긴 **실전
-장애 6건의 추적 기록** — 리랭커 무한 행, LLM 큐레이션 실패, 뒤집힌 직관들 —
-을 [`docs/postmortem.md`](docs/postmortem.md)에 남겼다. 이 프로젝트에서 가장
-재사용 가치가 높은 산출물은 표가 아니라 이 문서일 수 있다.
+> 정직한 네거티브·실패 추적(에이전트 반복이 1-shot 미역전, 퓨샷 리라이터 무효과 기각, 실전 장애 6건)은 [`docs/ablation_results.md`](docs/ablation_results.md) · [`docs/postmortem.md`](docs/postmortem.md).
