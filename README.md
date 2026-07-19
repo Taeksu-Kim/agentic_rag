@@ -4,9 +4,9 @@
 
 사내 HR 컴플라이언스 봇(한국 노동법) 시나리오지만 코드는 코퍼스 무관 — 데이터를 갈아끼우면 그대로 동작한다. 로컬 GPU 1장(RTX 4090)에서 임베더·리랭커·9B LLM 3모델을 동시 서빙.
 
-<video src="https://github.com/Taeksu-Kim/agentic_rag/raw/main/docs/media/demo.mp4" controls muted width="100%"></video>
+https://github.com/user-attachments/assets/19a2e501-e048-4040-8571-11518b433436
 
-_실시간 데모 (로컬 4090 1장에서 9B 에이전트가 실제로 도는 속도). 영상이 안 보이면 → [demo.mp4](docs/media/demo.mp4) · [demo.gif](docs/media/demo.gif)_
+_실시간 데모 (로컬 4090 1장에서 9B 에이전트가 실제로 도는 속도). 폴백 → [demo.mp4](docs/media/demo.mp4) · [demo.gif](docs/media/demo.gif)_
 
 ## 갖춘 것
 
