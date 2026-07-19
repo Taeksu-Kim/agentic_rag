@@ -27,6 +27,7 @@ SAMPLE_FILE = OUT_DIR / "sample_ids.json"
 K, PREFETCH = 8, 30
 COLLECTION = "statutes"
 SPARSE_BACKEND = "fastembed"
+KIWI_STATS = ROOT / "data" / "corpus" / "kiwi_bm25_stats.json"
 
 RETRIEVAL_ARMS = ["dense", "sparse", "hybrid",
                   "dense+ce", "sparse+ce", "hybrid+ce",
@@ -36,8 +37,8 @@ RETRIEVAL_ARMS = ["dense", "sparse", "hybrid",
 
 
 def _apply_paths(args) -> None:
-    """--outdir/--qrels/--collection/--sparse 오버라이드."""
-    global OUT_DIR, QRELS, SAMPLE_FILE, COLLECTION, SPARSE_BACKEND
+    """--outdir/--qrels/--collection/--sparse/--kiwi-stats 오버라이드."""
+    global OUT_DIR, QRELS, SAMPLE_FILE, COLLECTION, SPARSE_BACKEND, KIWI_STATS
     if getattr(args, "outdir", None):
         OUT_DIR = ROOT / args.outdir
     if getattr(args, "qrels", None):
@@ -46,6 +47,8 @@ def _apply_paths(args) -> None:
         COLLECTION = args.collection
     if getattr(args, "sparse", None):
         SPARSE_BACKEND = args.sparse
+    if getattr(args, "kiwi_stats", None):
+        KIWI_STATS = ROOT / args.kiwi_stats
     SAMPLE_FILE = OUT_DIR / "sample_ids.json"
 
 
@@ -59,7 +62,7 @@ def _live():
 
     if SPARSE_BACKEND == "kiwi":
         from retriever.kiwi_bm25 import KiwiBM25SparseEmbedder
-        sparse = KiwiBM25SparseEmbedder().load(ROOT / "data" / "corpus" / "kiwi_bm25_stats.json")
+        sparse = KiwiBM25SparseEmbedder().load(KIWI_STATS)
     else:
         sparse = BM25SparseEmbedder()
     return {
@@ -294,6 +297,7 @@ def main() -> None:
             sp.add_argument("--qrels", help="평가셋 parquet (기본 data/eval/qrels.parquet)")
             sp.add_argument("--collection", help="Qdrant 컬렉션 (기본 statutes)")
             sp.add_argument("--sparse", choices=["fastembed", "kiwi"], help="sparse 백엔드")
+            sp.add_argument("--kiwi-stats", help="kiwi BM25 통계 JSON (컬렉션과 짝 맞출 것)")
 
     args = ap.parse_args()
     args.fn(args)

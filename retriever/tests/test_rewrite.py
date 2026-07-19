@@ -17,3 +17,12 @@ def test_rewrite_identical_to_question_dropped():
 
 def test_rewrite_failure_returns_empty():
     assert rewrite_query(FakeLLM(["not json"]), "질문") == ""
+
+
+def test_rewrite_prompt_carries_fewshot_examples():
+    # 프롬프트에 변환 시범(퓨샷)이 실려 있어야 한다 — 형식 학습용, 정답 누수 아님
+    llm = FakeLLM.json({"query": "임금 체불 지연이자"})
+    rewrite_query(llm, "월급이 밀렸는데")
+    _sys, user, _schema = llm.calls[0]
+    assert user.count("질문:") >= 3  # 퓨샷 예시 여러 개 + 실제 질문
+    assert user.count("쿼리:") >= 2  # 예시마다 변환 결과 시범

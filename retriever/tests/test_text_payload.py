@@ -22,6 +22,19 @@ def test_embedding_text_has_law_article_header_and_content():
     assert "80퍼센트" in text
 
 
+def test_embedding_text_appends_doc2query_questions():
+    text = build_embedding_text(CLAUSE, questions=["연차 며칠 받나요?", "1년 일하면 휴가 생기나요?"])
+    assert text.startswith("근로기준법 제60조(연차 유급휴가)")
+    assert "80퍼센트" in text
+    assert "예상 질문:" in text and "연차 며칠 받나요?" in text
+    assert build_embedding_text(CLAUSE, questions=[]) == build_embedding_text(CLAUSE)
+
+
+def test_payload_text_stays_clean_of_questions():
+    # doc2query는 인덱스 텍스트 전용 — payload text(리랭커/에이전트 입력)는 원문 그대로
+    assert "예상 질문" not in build_payload(CLAUSE)["text"]
+
+
 def test_embedding_text_branch_article_formats_uijo():
     c = dict(CLAUSE, clause_no="74-2", clause_title="태아검진 시간의 허용 등")
     assert build_embedding_text(c).startswith("근로기준법 제74조의2(태아검진 시간의 허용 등)")

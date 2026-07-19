@@ -29,20 +29,29 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--collection", default="statutes")
     ap.add_argument("--sparse", choices=["fastembed", "kiwi"], default="fastembed",
-                    help="kiwi = 형태소 BM25 (통계를 data/corpus/kiwi_bm25_stats.json에 저장)")
+                    help="kiwi = 형태소 BM25 (통계를 --stats-out에 저장)")
+    ap.add_argument("--stats-out", default=os.path.join(ROOT, "data", "corpus", "kiwi_bm25_stats.json"),
+                    help="kiwi BM25 통계 저장 경로 — 컬렉션별로 분리할 것 (쿼리 시 같은 통계 필요)")
+    ap.add_argument("--doc2query",
+                    help="doc2query parquet(cid, questions) — 역질문을 인덱스 텍스트에 부착 (payload는 원문)")
     args = ap.parse_args()
 
     df = pd.read_parquet(CORPUS)
     clauses = df.to_dict("records")
-    texts = [build_embedding_text(c) for c in clauses]
-    print(f"{len(clauses)} clauses")
+    d2q: dict[str, list] = {}
+    if args.doc2query:
+        qdf = pd.read_parquet(args.doc2query)
+        d2q = {r.cid: list(r.questions) for r in qdf.itertuples()}
+    texts = [build_embedding_text(c, questions=d2q.get(f"{c['law_name']}|{c['clause_no']}"))
+             for c in clauses]
+    print(f"{len(clauses)} clauses" + (f", doc2query 부착 {sum(bool(v) for v in d2q.values())}" if d2q else ""))
 
     t0 = time.time()
     dense = VLLMDenseEmbedder()
     if args.sparse == "kiwi":
         from retriever.kiwi_bm25 import KiwiBM25SparseEmbedder
         sparse = KiwiBM25SparseEmbedder().fit(texts)
-        sparse.save(os.path.join(ROOT, "data", "corpus", "kiwi_bm25_stats.json"))
+        sparse.save(args.stats_out)
     else:
         sparse = BM25SparseEmbedder()
     dvs = dense.encode(texts)
