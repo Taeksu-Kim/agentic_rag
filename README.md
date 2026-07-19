@@ -10,6 +10,10 @@ Q: 육아휴직 기간에도 연차휴가가 발생하나요?
 → 근로기준법 제60조 리랭크 1위 → 제60조⑥ 정확 인용 답변
 ```
 
+https://github.com/user-attachments/assets/19a2e501-e048-4040-8571-11518b433436
+
+
+
 ## 핵심 결과 (ablation)
 
 전 조합을 고용노동부 질의회시 기반 **701쿼리 qrels**(조문 단위 정답)로 평가. 전체 표와 해석은 [`docs/ablation_results.md`](docs/ablation_results.md).
