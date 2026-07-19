@@ -40,7 +40,7 @@ Qdrant 벡터DB에 dense(`Qwen3-Embedding-0.6B`) + kiwi 형태소 BM25를 RRF로
 
 ## 데모 (Gradio) — HR 에이전트 + HITL
 
-하나의 대화가 **복합 질문(검색) → 계산 → 신청**으로 자연스럽게 이어집니다 _(상단 GIF는 실시간 속도 — 로컬 4090 1장에서 9B 에이전트가 실제로 도는 시간)_:
+하나의 대화가 **복합 질문(검색) → 계산 → 신청**으로 자연스럽게 이어집니다 _(상단 영상 참고)_:
 
 | ① 복합 질문 → 다중 검색·조문 전문 | ② "내 연차 계산" → 입력 폼(HITL) |
 |---|---|
@@ -59,10 +59,6 @@ Qdrant 벡터DB에 dense(`Qwen3-Embedding-0.6B`) + kiwi 형태소 BM25를 RRF로
 - 툴을 추가하면 다른 처리 업무(증명서 발급 등)로 확장됩니다. 코드: [`retriever/hr_tools.py`](retriever/hr_tools.py), [`retriever/hr_agent.py`](retriever/hr_agent.py), UI [`ui/app.py`](ui/app.py).
 
 실행: `PYTHONPATH=. python ui/app.py` (백엔드 `serve.sh` 가동 후). 고화질 영상: [`docs/media/demo.mp4`](docs/media/demo.mp4). 재현 캡처: `scripts/capture_demo.py`.
-
-https://github.com/user-attachments/assets/19a2e501-e048-4040-8571-11518b433436
-
-
 
 ## 핵심 결과 (ablation)
 
